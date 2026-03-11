@@ -3,15 +3,16 @@
 **Project:** Google Gemini CLI  
 **Organization:** Google  
 **Program:** Google Summer of Code  
-**Difficulty:** Hard  
-**Size:** Large (350 hours)
+**Idea:** Multi-IDE Integration Enhancement (#4)  
+**Difficulty:** Medium  
+**Size:** 175 hours
 
 ---
 
 ## Table of Contents
 
 1. [About Me](#1-about-me)
-2. [The Problem I Want to Solve](#2-the-problem-i-want-to-solve)
+2. [Why This Project](#2-why-this-project)
 3. [Understanding the Existing System](#3-understanding-the-existing-system)
 4. [My Approach](#4-my-approach)
 5. [The Common IDE Context Protocol](#5-the-common-ide-context-protocol)
@@ -46,7 +47,9 @@ My relevant experience:
 
 ---
 
-## 2. The Problem I Want to Solve
+## 2. Why This Project
+
+This is GSoC idea #4 on the Gemini CLI project list: *Multi-IDE Integration Enhancement*. The goal is to expand Gemini CLI's IDE integration beyond VS Code to JetBrains IDEs, Neovim, and Zed — with a common IDE context protocol and improved IDE detection.
 
 Gemini CLI's IDE integration is genuinely impressive when it works. The CLI knows which files you have open, where your cursor is, what you've selected — and when you ask it to modify a file, the diff appears right inside your editor. It feels like pair programming, not copy-pasting.
 
@@ -58,49 +61,70 @@ The same is true for Neovim users, who are arguably the most natural audience fo
 
 This isn't a niche problem. JetBrains IDEs have [~30% of the developer market](https://www.jetbrains.com/research/developer-ecosystem/). Neovim is the editor of choice for a large portion of the developer community that lives in the terminal. These are exactly the users most likely to reach for a CLI-based AI tool — and right now they get a second-class experience.
 
-**What I want to build:** A JetBrains companion plugin that gives IntelliJ, PyCharm, and WebStorm users the same integration VS Code users already have. A working Neovim integration with bidirectional communication. A Zed extension that completes the picture for that editor. And a Common IDE Context Protocol that makes every future editor integration — Helix, Sublime, whatever comes next — straightforward to build without starting from scratch.
+What makes this technically interesting is that the VS Code companion already defines a clean contract: MCP over HTTP, a discovery file, `ide/contextUpdate`, and diff tools. The work isn't designing a new protocol — it's implementing the existing one faithfully across three different editor environments, each with its own plugin model and constraints. JetBrains uses a JVM plugin with IntelliJ Platform APIs. Neovim needs a Lua plugin plus a bridge process because Lua's async I/O isn't suited for running an MCP HTTP server. Zed is a Rust/WASM extension. Three different runtimes, one contract.
+
+**What this project delivers:** A JetBrains companion plugin that gives IntelliJ, PyCharm, and WebStorm users the same integration VS Code users already have. A working Neovim integration with bidirectional communication. A Zed extension that completes the picture for that editor. And a Common IDE Context Protocol that makes every future editor integration — Helix, Sublime, whatever comes next — straightforward to build without starting from scratch.
 
 ---
 
 ## 3. Understanding the Existing System
 
-Before proposing anything, I spent time reading through the existing codebase to understand how the VS Code integration actually works. The design is clean and worth understanding in detail, because it's the contract I'll be implementing.
+I started by reading the current VS Code integration carefully — the spec, the source, and the CLI-side consumer — so I could match its behavior instead of guessing.
 
-### How the VS Code companion works today
+### The VS Code companion: what it actually does
 
-The companion is a local HTTP server running inside the IDE extension. When VS Code starts, the extension:
+The companion is a VS Code extension (`gemini-cli-vscode-ide-companion`, published by Google) that activates on startup (`onStartupFinished`) and runs a local Express HTTP server implementing MCP. It has four main source files:
 
-1. Starts an MCP server on a random loopback port
-2. Writes a discovery file to `$TMPDIR/gemini/ide/` so the CLI can find it
-3. Watches for file/cursor/selection changes and pushes `ide/contextUpdate` notifications to the CLI
-4. Registers `openDiff` and `closeDiff` tools that the CLI calls when it wants to show proposed changes
+| File | Role |
+|---|---|
+| `extension.ts` | Entry point — activates the server, registers VS Code commands |
+| `ide-server.ts` | `IDEServer` class — Express + MCP, session management, keep-alive pings |
+| `open-files-manager.ts` | Tracks open files, cursor, selection; fires `ide/contextUpdate` |
+| `diff-manager.ts` | Opens VS Code diff editor, fires `ide/diffAccepted` / `ide/diffRejected` |
 
-On the CLI side, when you run `gemini` inside VS Code's terminal, it traverses the process tree to find the IDE's PID, reads the discovery file, connects to the MCP server, and from that point on it has live context about what you're doing in the editor.
+The MCP server uses `@modelcontextprotocol/sdk` for the protocol layer, `express` for HTTP, `cors` for request filtering, and `zod` for tool parameter validation. It exposes a single `/mcp` endpoint.
 
-Here's the full picture:
+The flow has three distinct phases — startup, live context, and diff:
+
+**Phase 1: Startup and connection**
 
 ```mermaid
 sequenceDiagram
-    participant IDE as IDE Extension
-    participant FS as Filesystem ($TMPDIR)
+    participant EXT as IDE Extension
+    participant FS as $TMPDIR/gemini/ide/
     participant CLI as Gemini CLI
 
-    IDE->>FS: Write discovery file<br/>(port, token, workspacePath)
-    IDE->>IDE: Start MCP HTTP server
-
-    CLI->>FS: Read discovery file<br/>(traverse process tree → find PID)
-    CLI->>IDE: Connect to MCP server<br/>(Bearer token auth)
-
-    loop User is working
-        IDE->>CLI: ide/contextUpdate notification<br/>(open files, cursor, selection)
-    end
-
-    CLI->>IDE: tools/call openDiff<br/>(filePath, newContent)
-    IDE->>IDE: Open native diff editor
-    IDE->>CLI: ide/diffAccepted or ide/diffRejected
+    EXT->>EXT: Start MCP server on random port
+    EXT->>FS: Write gemini-ide-server-{PID}-{PORT}.json
+    CLI->>FS: Find file matching IDE PID
+    CLI->>EXT: Connect (Bearer token auth)
+    CLI->>EXT: tools/list
 ```
 
-The discovery file format is:
+**Phase 2: Live context (continuous)**
+
+```mermaid
+sequenceDiagram
+    participant EXT as IDE Extension
+    participant CLI as Gemini CLI
+
+    EXT->>CLI: ide/contextUpdate (open files, cursor, selection)
+    Note right of CLI: IdeContextStore normalizes - sort by timestamp, cap 10 files, truncate selection to 16 KiB
+```
+
+**Phase 3: Diff workflow**
+
+```mermaid
+sequenceDiagram
+    participant EXT as IDE Extension
+    participant CLI as Gemini CLI
+
+    CLI->>EXT: openDiff (filePath, newContent)
+    EXT->>EXT: Open native diff editor
+    EXT->>CLI: ide/diffAccepted or ide/diffRejected
+```
+
+### The discovery file format
 
 ```json
 {
@@ -114,17 +138,43 @@ The discovery file format is:
 }
 ```
 
-The companion spec (`docs/ide-integration/ide-companion-spec.md`) documents all of this precisely. My job is to implement the same contract for JetBrains — using JetBrains Platform APIs instead of VS Code APIs, but producing identical behavior from the CLI's perspective.
+The file is named `gemini-ide-server-{IDE_PID}-{PORT}.json` and written with `600` permissions. The CLI traverses the process tree upward from its own PID, finds the shell, then the IDE's PID, and looks for a matching file. If multiple IDE windows are open on the same workspace, `GEMINI_CLI_IDE_SERVER_PORT` (injected into integrated terminals) is used to tie-break.
 
-### What the CLI expects
+### What the CLI does with this
 
-The CLI's `IdeClient` (`packages/core/src/ide/ide-client.ts`) is the consumer of all this. It:
-- Discovers the IDE via process tree traversal + discovery file
-- Connects via MCP and calls `tools/list` to discover available tools
-- Receives `ide/contextUpdate` notifications and normalizes them (sorts files by timestamp, truncates to 10 files, truncates selection to 16 KiB)
-- Calls `openDiff` when proposing file changes, waits for `ide/diffAccepted` or `ide/diffRejected`
+The CLI-side consumer is `IdeClient` in `packages/core/src/ide/ide-client.ts` — a singleton that manages the full connection lifecycle. After connecting it:
 
-The important insight here is that **the CLI doesn't care which editor it's talking to**. As long as the companion implements the contract correctly, everything works. This is the right abstraction, and it's what makes multi-editor support tractable.
+- Calls `tools/list` to discover what the companion supports (this is how it knows whether `openDiff` is available before trying to use it)
+- Receives `ide/contextUpdate` notifications and normalizes them via `IdeContextStore`: sorts open files by timestamp, enforces the 10-file cap, truncates selection to 16 KiB. The `broadcastIdeContextUpdate` method on the server side ensures all connected CLI sessions get updates, not just the most recent one
+- Calls `openDiff` when proposing file changes, then waits for `ide/diffAccepted`, `ide/diffRejected`, or `ide/diffClosed` (a backwards-compat alias) — serialized via a promise-based mutex so only one diff is open at a time
+
+The `IdeClient` also supports a stdio transport fallback via `GEMINI_CLI_IDE_SERVER_STDIO_COMMAND` / `GEMINI_CLI_IDE_SERVER_STDIO_ARGS` env vars, for custom integrations that prefer subprocess communication over HTTP.
+
+### How the CLI finds the IDE
+
+The process tree traversal in `packages/core/src/ide/process-utils.ts` walks up from the CLI's own PID looking for a known shell, then takes its grandparent as the IDE PID (the direct parent is typically an intermediate process like VS Code's `ptyhost`):
+
+```
+VS Code:    code (IDE) ← ptyhost ← bash ← gemini CLI
+JetBrains:  idea (IDE) ← terminal ← bash ← gemini CLI
+                ↑
+          grandparent of the shell = IDE PID written to discovery file
+```
+
+On Windows it fetches the full process table via PowerShell in one shot and traverses in memory instead. `GEMINI_CLI_IDE_PID` overrides both strategies — useful when the CLI isn't running inside the IDE's terminal at all.
+
+One important detail for the JetBrains implementation: the VS Code extension writes the discovery file using `process.ppid` (the parent of the Node.js extension host = the VS Code window process). For JetBrains there's no extension host layer, so the correct PID is `ProcessHandle.current().pid()` — the JVM process itself. Getting this right is what makes the CLI's traversal find the correct discovery file.
+
+### The key insight
+
+The CLI does not care which editor is on the other end. It only cares about the contract:
+
+- discovery file in the right place, with the right PID in the filename
+- authenticated MCP connection at the port listed in that file
+- `ide/contextUpdate` notifications in the `IdeContext` shape
+- `openDiff` / `closeDiff` tools registered on the MCP server
+
+That abstraction is what makes this project tractable. Each new editor companion is an independent implementation of the same well-defined interface — and the existing `IdeClient` code needs no changes to work with any of them.
 
 ---
 
@@ -140,12 +190,12 @@ The work breaks into three layers:
 
 ```mermaid
 graph TD
-    A["Gemini CLI core<br/>(unchanged for MVP)"]
-    B["Companion contract<br/>(MCP over HTTP, discovery file,<br/>ide/contextUpdate, openDiff/closeDiff)"]
-    C["Common IDE Context Protocol<br/>(internal schemas, not a wire protocol)"]
-    D["JetBrains companion<br/>(Kotlin/Gradle plugin)"]
-    E["Neovim companion<br/>(Lua plugin + bridge process)"]
-    F["Zed companion<br/>(Rust/WASM extension)"]
+    A[Gemini CLI core]
+    B[Companion contract - MCP over HTTP, discovery file, ide/contextUpdate, openDiff/closeDiff]
+    C[Common IDE Context Protocol - internal JSON schemas]
+    D[JetBrains companion - Kotlin/Gradle plugin]
+    E[Neovim companion - Lua plugin + bridge process]
+    F[Zed companion - Rust/WASM extension]
 
     A -->|consumes| B
     B -->|implemented by| D
@@ -235,37 +285,29 @@ Truncation (10 files, 16 KiB selection) is enforced by the CLI's `IdeContextStor
 The plugin is a **headless background service** — no UI, no tool window, no embedded browser. When IntelliJ starts, the plugin starts an MCP server, writes a discovery file, and begins watching for editor events. That's it. From the user's perspective, it's invisible until they run `gemini` in the integrated terminal and it just works.
 
 ```mermaid
-graph LR
-    subgraph "JetBrains IDE"
-        A[GeminiPluginStartupActivity]
-        B[BridgeLifecycleService]
-        C[McpHttpServer]
-        D[DiscoveryFileManager]
-        E[EditorContextTracker]
-        F[GeminiDiffManager]
-        G[TerminalEnvSyncService]
+graph TD
+    A[GeminiPluginStartupActivity]
+    B[BridgeLifecycleService]
+    C[McpHttpServer]
+    D[DiscoveryFileManager]
+    E[EditorContextTracker]
+    F[GeminiDiffManager]
+    G[TerminalEnvSyncService]
+    H[/tmp/gemini/ide/ - discovery file]
+    I[Gemini CLI - IdeClient]
 
-        A --> B
-        B --> C
-        B --> D
-        B --> E
-        B --> F
-        B --> G
-    end
+    A --> B
+    B --> C
+    B --> D
+    B --> E
+    B --> F
+    B --> G
 
-    subgraph "Filesystem"
-        H["/tmp/gemini/ide/<br/>gemini-ide-server-PID-PORT.json"]
-    end
-
-    subgraph "Gemini CLI"
-        I[IdeClient]
-    end
-
+    E -->|ide/contextUpdate| C
+    F -->|ide/diffAccepted or ide/diffRejected| C
     D -->|writes| H
     I -->|reads| H
     C <-->|MCP over HTTP| I
-    E -->|ide/contextUpdate| C
-    F -->|ide/diffAccepted<br/>ide/diffRejected| C
 ```
 
 ### Module structure
@@ -404,27 +446,22 @@ The other challenge is that Lua's async I/O (`vim.loop` / libuv) isn't well-suit
 ### Architecture
 
 ```mermaid
-graph LR
-    subgraph "Neovim"
-        A["gemini-cli.nvim<br/>(Lua plugin)"]
-        B["autocmds:<br/>BufEnter, CursorMoved,<br/>TextYankPost, VimLeavePre"]
-        C["BridgeClient<br/>(vim.loop / Unix socket)"]
-        A --> B
-        A --> C
-    end
+graph TD
+    A[gemini-cli.nvim - Lua plugin]
+    B[autocmds - BufEnter, CursorMoved, TextYankPost, VimLeavePre]
+    C[BridgeClient - vim.loop / Unix socket]
+    D[McpHttpServer - Node.js bridge process]
+    E[DiscoveryFileManager - writes file with Neovim PID]
+    F[Gemini CLI - IdeClient]
+    H[/tmp/gemini/ide/ - discovery file]
 
-    subgraph "Bridge process (Node.js)"
-        D["McpHttpServer<br/>(same contract)"]
-        E["DiscoveryFileManager"]
-    end
-
-    subgraph "Gemini CLI"
-        F["IdeClient"]
-    end
-
-    C -->|"JSON over Unix socket"| D
-    D -->|"MCP over HTTP"| F
-    E -->|"writes discovery file<br/>(with Neovim's PID)"| F
+    A --> B
+    A --> C
+    C -->|JSON over Unix socket| D
+    D --> E
+    E -->|writes| H
+    H -->|CLI reads on startup| F
+    D <-->|MCP over HTTP| F
 ```
 
 The bridge process is a small Node.js script (< 200 lines, using `@modelcontextprotocol/sdk`) bundled inside the Lua plugin. The Lua plugin starts it with `vim.fn.jobstart()` and communicates over a Unix socket using newline-delimited JSON. The bridge writes the discovery file using Neovim's PID (obtained via `vim.fn.getpid()` and passed to the bridge at startup), not its own — this is what makes the CLI's process-tree traversal work when the CLI is running inside Neovim's terminal.
@@ -459,25 +496,22 @@ Zed extensions are Rust/WASM modules running inside the editor process. Unlike N
 ### Architecture
 
 ```mermaid
-graph LR
-    subgraph "Zed"
-        A["gemini-cli-zed<br/>(Rust/WASM extension)"]
-        B["WorkspaceObserver<br/>(open buffers, active editor,<br/>selection changes)"]
-        C["McpHttpServer<br/>(tokio async)"]
-        D["DiscoveryFileManager"]
-        E["DiffManager<br/>(Zed native diff API)"]
-        A --> B
-        A --> C
-        A --> D
-        A --> E
-    end
+graph TD
+    A[gemini-cli-zed - Rust/WASM extension]
+    B[WorkspaceObserver - open buffers, active editor, selection changes]
+    C[McpHttpServer - tokio async]
+    D[DiscoveryFileManager]
+    E[DiffManager - Zed native diff API]
+    F[Gemini CLI - IdeClient]
+    H[/tmp/gemini/ide/ - discovery file]
 
-    subgraph "Gemini CLI"
-        F["IdeClient"]
-    end
-
-    C <-->|"MCP over HTTP"| F
-    D -->|"writes discovery file"| F
+    A --> B
+    A --> C
+    A --> D
+    A --> E
+    D -->|writes| H
+    H -->|CLI reads on startup| F
+    C <-->|MCP over HTTP| F
 ```
 
 Zed exposes `workspace.observe_open_buffers()` and `editor.observe_selections()` — these map directly onto the `EditorSnapshot` model. The `isTrusted` field defaults to `true` since Zed has no workspace trust concept. Diff handling uses Zed's native diff view; accept maps to saving the proposed content, reject maps to closing without saving.
