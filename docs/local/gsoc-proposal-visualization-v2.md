@@ -66,9 +66,9 @@ Every tool in `packages/core/src/tools/` follows the same three-part pattern:
 
 ```mermaid
 flowchart LR
-    A["tool-names.ts\n(name constant +\nALL_BUILTIN_TOOL_NAMES)"]
-    B["definitions/\n(JSON schema via\nresolveToolDeclaration)"]
-    C["*Tools.ts\n(BaseToolInvocation subclass\nwith execute())"]
+    A["tool-names.ts<br/>(name constant +<br/>ALL_BUILTIN_TOOL_NAMES)"]
+    B["definitions/<br/>(JSON schema via<br/>resolveToolDeclaration)"]
+    C["*Tools.ts<br/>(BaseToolInvocation subclass<br/>with execute())"]
 
     A --> B --> C
 ```
@@ -82,17 +82,17 @@ A `ToolResult` (from `packages/core/src/tools/tools.ts`) has two fields that ser
 ```mermaid
 flowchart TD
     TR["ToolResult"]
-    TR --> LC["llmContent: PartListUnion\n→ fed back into model history\n(what the model sees)"]
-    TR --> RD["returnDisplay: ToolResultDisplay\n→ rendered to the user\n(what the human sees)"]
+    TR --> LC["llmContent: PartListUnion<br/>fed back into model history<br/>(what the model sees)"]
+    TR --> RD["returnDisplay: ToolResultDisplay<br/>rendered to the user<br/>(what the human sees)"]
 
-    RD --> S["string\n(markdown or plain text)"]
-    RD --> FD["FileDiff\n→ DiffRenderer"]
-    RD --> AO["AnsiOutput\n→ AnsiOutputText"]
-    RD --> TL["TodoList\n→ suppressed (TodoTray handles it)"]
-    RD --> SP["SubagentProgress\n→ SubagentProgressDisplay"]
-    RD --> TI["TerminalImage ← NEW\n→ TerminalImageDisplay"]
+    RD --> S["string<br/>(markdown or plain text)"]
+    RD --> FD["FileDiff → DiffRenderer"]
+    RD --> AO["AnsiOutput → AnsiOutputText"]
+    RD --> TL["TodoList<br/>(suppressed, TodoTray handles it)"]
+    RD --> SP["SubagentProgress → SubagentProgressDisplay"]
+    RD --> TI["TerminalImage — NEW<br/>→ TerminalImageDisplay"]
 
-    style TI fill:#d4edda,stroke:#28a745
+    style TI fill:#1a7a3c,color:#ffffff,stroke:#0d5c2a
 ```
 
 `ToolResultDisplay` is a discriminated union. Adding `TerminalImage` is a surgical, additive change—no existing branches are touched.
@@ -103,16 +103,16 @@ This is the full path a `returnDisplay` value travels before the user sees it:
 
 ```mermaid
 sequenceDiagram
-    participant Tool as visualize tool<br/>(packages/core)
-    participant TM as ToolMessage.tsx<br/>(packages/cli)
-    participant TRD as ToolResultDisplay.tsx<br/>(packages/cli)
-    participant TID as TerminalImageDisplay<br/>(NEW component)
+    participant Tool as visualize tool (core)
+    participant TM as ToolMessage.tsx (cli)
+    participant TRD as ToolResultDisplay.tsx (cli)
+    participant TID as TerminalImageDisplay (NEW)
     participant Term as Terminal
 
     Tool->>TM: ToolResult { returnDisplay: TerminalImage }
     TM->>TRD: resultDisplay prop
-    TRD->>TRD: branch on type === 'terminal_image'
-    TRD->>TID: <TerminalImageDisplay image={...} />
+    TRD->>TRD: branch on type === terminal_image
+    TRD->>TID: TerminalImageDisplay image prop
     TID->>Term: process.stdout.write(escapeSequence)
     Term->>Term: renders inline image
 ```
@@ -136,9 +136,9 @@ Slash commands live in `packages/cli/src/commands/` and are loaded by `BuiltinCo
 ```mermaid
 flowchart LR
     A["SlashCommand.action(args)"]
-    A --> B["tool_action\n→ schedules a tool\nwith parsed args"]
-    A --> C["message\n→ shows text\nto the user"]
-    A --> D["submit_prompt\n→ injects into\nagent loop"]
+    A --> B["tool_action<br/>schedules a tool<br/>with parsed args"]
+    A --> C["message<br/>shows text<br/>to the user"]
+    A --> D["submit_prompt<br/>injects into<br/>agent loop"]
 ```
 
 `/visualize` will return a `tool_action` that schedules the `visualize` tool with the parsed Mermaid source. This is the same pattern used by existing commands.
@@ -180,30 +180,30 @@ flowchart LR
 ```mermaid
 flowchart TD
     subgraph Input
-        U1["User: 'explain auth flow'"]
+        U1["User: explain auth flow"]
         U2["User: /visualize diagram.mmd"]
     end
 
-    subgraph AgentLoop["Agent Loop (packages/core/src/agents/)"]
-        RF["read_file / grep / glob\n(existing tools)"]
-        VT["visualize tool ← NEW"]
+    subgraph AgentLoop["Agent Loop — packages/core/src/agents/"]
+        RF["read_file / grep / glob (existing tools)"]
+        VT["visualize tool — NEW"]
     end
 
-    subgraph VisualizationPipeline["Visualization Pipeline (packages/core/src/)"]
-        CL["visualizeCache.ts\nSHA-256 keyed disk cache\nos.tmpdir()/gemini/visualize/"]
-        MR["mermaidRenderer.ts\nmermaid-isomorphic → SVG\nsharp → PNG"]
-        TI["terminalImage.ts\ndetectTerminalGraphics()\nencodeImageToProtocol()"]
+    subgraph VisualizationPipeline["Visualization Pipeline — packages/core/src/"]
+        CL["visualizeCache.ts<br/>SHA-256 keyed disk cache<br/>os.tmpdir()/gemini/visualize/"]
+        MR["mermaidRenderer.ts<br/>mermaid-isomorphic → SVG<br/>sharp → PNG"]
+        TI["terminalImage.ts<br/>detectTerminalGraphics()<br/>encodeImageToProtocol()"]
     end
 
-    subgraph CLILayer["CLI Layer (packages/cli/src/)"]
-        TRD["ToolResultDisplay.tsx\nnew terminal_image branch"]
-        TID["TerminalImageDisplay\nRawEscapeOutput component"]
+    subgraph CLILayer["CLI Layer — packages/cli/src/"]
+        TRD["ToolResultDisplay.tsx<br/>new terminal_image branch"]
+        TID["TerminalImageDisplay<br/>RawEscapeOutput component"]
     end
 
     subgraph Terminal
-        KT["Kitty / iTerm2 / Sixel\n→ inline raster image"]
-        AA["ASCII art fallback\n→ luminance-mapped characters"]
-        SRC["Mermaid source\n→ fenced code block (no TTY)"]
+        KT["Kitty / iTerm2 / Sixel<br/>inline raster image"]
+        AA["ASCII art fallback<br/>luminance-mapped characters"]
+        SRC["Mermaid source<br/>fenced code block (no TTY)"]
     end
 
     U1 --> RF --> VT
@@ -217,11 +217,11 @@ flowchart TD
     TID --> AA
     TID --> SRC
 
-    style VT fill:#d4edda,stroke:#28a745
-    style CL fill:#d4edda,stroke:#28a745
-    style MR fill:#d4edda,stroke:#28a745
-    style TI fill:#d4edda,stroke:#28a745
-    style TID fill:#d4edda,stroke:#28a745
+    style VT fill:#1a7a3c,color:#ffffff,stroke:#0d5c2a
+    style CL fill:#1a7a3c,color:#ffffff,stroke:#0d5c2a
+    style MR fill:#1a7a3c,color:#ffffff,stroke:#0d5c2a
+    style TI fill:#1a7a3c,color:#ffffff,stroke:#0d5c2a
+    style TID fill:#1a7a3c,color:#ffffff,stroke:#0d5c2a
 ```
 
 Green nodes are new. Everything else is existing infrastructure being extended.
@@ -271,65 +271,56 @@ sequenceDiagram
 ```mermaid
 flowchart TD
     A["detectTerminalGraphics()"]
-    A --> B{"GEMINI_CLI_TERMINAL_GRAPHICS\nenv var set?"}
-    B -- "yes" --> C["Use override directly\n(kitty/iterm2/sixel/ascii/source)"]
+    A --> B{"GEMINI_CLI_TERMINAL_GRAPHICS set?"}
+    B -- "yes" --> C["Use override directly<br/>(kitty / iterm2 / sixel / ascii / source)"]
     B -- "no" --> D{"process.stdout.isTTY?"}
-    D -- "false\n(pipe / --prompt)" --> E["return 'source'\n→ emit Mermaid fenced block"]
+    D -- "false — pipe or --prompt" --> E["return 'source'<br/>emit Mermaid as fenced block"]
     D -- "true" --> F{"TERM_PROGRAM?"}
     F -- "kitty" --> G["return 'kitty'"]
     F -- "iTerm.app" --> H["return 'iterm2'"]
-    F -- "vscode" --> I{"VS Code ≥ 1.80?"}
+    F -- "vscode" --> I{"VS Code >= 1.80?"}
     I -- "yes" --> J["return 'sixel'"]
     I -- "no" --> K["return 'ascii'"]
     F -- "other" --> L{"TMUX set?"}
-    L -- "yes" --> M["return 'ascii'\n(tmux strips Kitty/iTerm2\nescape sequences)"]
-    L -- "no" --> N{"WT_SESSION set?\nor TERM=wezterm?"}
+    L -- "yes" --> M["return 'ascii'<br/>tmux strips Kitty/iTerm2<br/>escape sequences silently"]
+    L -- "no" --> N{"WT_SESSION set?<br/>or TERM=wezterm?"}
     N -- "yes" --> O["return 'sixel'"]
-    N -- "no" --> P{"TERM includes 'xterm'\n+ DA1 Sixel probe?"}
+    N -- "no" --> P{"TERM includes xterm<br/>+ DA1 Sixel probe?"}
     P -- "yes" --> Q["return 'sixel'"]
     P -- "no" --> R["return 'ascii'"]
 
-    style E fill:#fff3cd,stroke:#ffc107
-    style M fill:#fff3cd,stroke:#ffc107
+    style E fill:#7a5200,color:#ffffff,stroke:#5a3c00
+    style M fill:#7a5200,color:#ffffff,stroke:#5a3c00
 ```
 
 **Priority rationale:** Kitty's protocol is the most capable (chunked transfer, placement IDs, z-index control). iTerm2 is the most widely supported on macOS. Sixel has the broadest cross-platform support including Windows Terminal. ASCII art ensures every terminal gets *something* useful. The `TMUX` detection is a non-obvious but critical case—tmux strips Kitty and iTerm2 escape sequences silently, producing garbage output without this guard.
 
 ### 5.4 New Files and Their Relationships
 
-```mermaid
-graph LR
-    subgraph core["packages/core/src/"]
-        TN["tools/tool-names.ts\n+ VISUALIZE_TOOL_NAME\n+ ALL_BUILTIN_TOOL_NAMES"]
-        TT["tools/tools.ts\n+ TerminalImage interface\n+ ToolResultDisplay union"]
-        VTool["tools/visualizeTools.ts ← NEW\nVisualizeInvocation\nextends BaseToolInvocation"]
-        VDef["tools/definitions/visualizeTools.ts ← NEW\nJSON schema declaration"]
-        MR["services/mermaidRenderer.ts ← NEW\nmermaid-isomorphic subprocess\nSVG → PNG via sharp"]
-        VC["services/visualizeCache.ts ← NEW\nSHA-256 keyed disk cache\nLRU eviction, TTL cleanup"]
-        TImg["utils/terminalImage.ts ← NEW\ndetectTerminalGraphics()\nencodeImageToProtocol()\nKitty / iTerm2 / Sixel / ASCII"]
-    end
+Files marked `[NEW]` are introduced by this proposal. Everything else is an existing file being extended.
 
-    subgraph cli["packages/cli/src/"]
-        VC2["commands/visualizeCommand.ts ← NEW\n/visualize slash command\nfile path + inline modes"]
-        BCL["commands/BuiltinCommandLoader.ts\n+ register visualizeCommand"]
-        TRDT["ui/components/messages/ToolResultDisplay.tsx\n+ terminal_image branch\n+ TerminalImageDisplay component"]
-    end
-
-    TN --> VTool
-    TT --> VTool
-    VDef --> VTool
-    MR --> VTool
-    VC --> VTool
-    TImg --> VTool
-    VTool --> TRDT
-    VC2 --> BCL
-
-    style VTool fill:#d4edda,stroke:#28a745
-    style VDef fill:#d4edda,stroke:#28a745
-    style MR fill:#d4edda,stroke:#28a745
-    style VC fill:#d4edda,stroke:#28a745
-    style TImg fill:#d4edda,stroke:#28a745
-    style VC2 fill:#d4edda,stroke:#28a745
+```
+gemini-cli/
+├── packages/
+│   ├── core/src/
+│   │   ├── tools/
+│   │   │   ├── tool-names.ts              (modified) + VISUALIZE_TOOL_NAME, ALL_BUILTIN_TOOL_NAMES
+│   │   │   ├── tools.ts                   (modified) + TerminalImage interface, ToolResultDisplay union
+│   │   │   ├── visualizeTools.ts          [NEW] VisualizeInvocation extends BaseToolInvocation
+│   │   │   └── definitions/
+│   │   │       └── visualizeTools.ts      [NEW] JSON schema via resolveToolDeclaration
+│   │   ├── services/
+│   │   │   ├── mermaidRenderer.ts         [NEW] mermaid-isomorphic subprocess, SVG → PNG via sharp
+│   │   │   └── visualizeCache.ts          [NEW] SHA-256 keyed disk cache, LRU eviction, TTL cleanup
+│   │   └── utils/
+│   │       └── terminalImage.ts           [NEW] detectTerminalGraphics(), encodeImageToProtocol()
+│   │
+│   └── cli/src/
+│       ├── commands/
+│       │   ├── visualizeCommand.ts        [NEW] /visualize slash command, file + inline modes
+│       │   └── BuiltinCommandLoader.ts    (modified) + register visualizeCommand
+│       └── ui/components/messages/
+│           └── ToolResultDisplay.tsx      (modified) + terminal_image branch, TerminalImageDisplay
 ```
 
 ---
@@ -493,19 +484,19 @@ export interface MermaidRenderer {
 ```mermaid
 flowchart LR
     A["mermaidCode string"]
-    B["mermaid-isomorphic\n(Playwright-based, no Puppeteer)\nreturns SVG string"]
-    C["sharp\nSVG → PNG Buffer\nvia librsvg"]
+    B["mermaid-isomorphic<br/>Playwright-based, no Puppeteer<br/>returns SVG string"]
+    C["sharp<br/>SVG → PNG Buffer<br/>via librsvg"]
     D["PNG Buffer"]
-    E["@mermaid-js/mermaid-cli\n(fallback if mermaid-isomorphic\nnot installed)"]
-    F["Mermaid source\nas fenced code block\n(last resort)"]
+    E["@mermaid-js/mermaid-cli<br/>fallback if mermaid-isomorphic<br/>not installed"]
+    F["Mermaid source<br/>as fenced code block<br/>(last resort)"]
 
     A --> B --> C --> D
-    A -- "mermaid-isomorphic\nnot found" --> E --> C
+    A -- "mermaid-isomorphic not found" --> E --> C
     E -- "mmdc not on PATH" --> F
 
-    style B fill:#d4edda,stroke:#28a745
-    style E fill:#fff3cd,stroke:#ffc107
-    style F fill:#f8d7da,stroke:#dc3545
+    style B fill:#1a7a3c,color:#ffffff,stroke:#0d5c2a
+    style E fill:#7a5200,color:#ffffff,stroke:#5a3c00
+    style F fill:#8b1a1a,color:#ffffff,stroke:#6b0f0f
 ```
 
 All rendering dependencies are **optional**. The tool degrades gracefully through the chain without crashing. Rendering runs in a subprocess with a 15-second `AbortSignal` timeout and a 512 MB memory limit to prevent unbounded resource use from large or malformed diagrams.
@@ -516,18 +507,18 @@ All rendering dependencies are **optional**. The tool degrades gracefully throug
 
 ```mermaid
 flowchart LR
-    A["visualize tool\ncalls cache.get(key)"]
-    B{"Entry exists\nin os.tmpdir()/gemini/visualize/?"}
-    C{"PNG header\nvalid?"}
-    D["Return Buffer\n(cache hit)"]
-    E["Return null\n(cache miss → render)"]
-    F["cache.set(key, pngBuffer)\natomic rename: .tmp → .png\nprevents partial-write reads"]
-    G["LRU eviction\nif > 50 entries\nevict oldest by mtime"]
+    A["visualize tool<br/>calls cache.get(key)"]
+    B{"Entry exists in<br/>os.tmpdir()/gemini/visualize/?"}
+    C{"PNG header valid?<br/>check magic bytes"}
+    D["Return Buffer<br/>(cache hit)"]
+    E["Return null<br/>(cache miss — render)"]
+    F["cache.set(key, pngBuffer)<br/>atomic rename: .tmp → .png<br/>prevents partial-write reads"]
+    G["LRU eviction<br/>if more than 50 entries<br/>evict oldest by mtime"]
 
     A --> B
     B -- "yes" --> C
     C -- "yes" --> D
-    C -- "no (corrupted)" --> E
+    C -- "no, corrupted" --> E
     B -- "no" --> E
     E --> F --> G
 ```
@@ -658,25 +649,25 @@ Most proposals describe the happy path. Here is what can go wrong and exactly ho
 ```mermaid
 flowchart TD
     A["mermaidCode input"]
-    B{"validateMermaidSource()\nbasic syntax check"}
-    B -- "invalid" --> C["Return error string\nwith offending line\nNo subprocess spawned"]
-    B -- "valid" --> D{"mermaid-isomorphic\navailable?"}
+    B{"validateMermaidSource()<br/>basic syntax check"}
+    B -- "invalid" --> C["Return error string<br/>with offending line<br/>No subprocess spawned"]
+    B -- "valid" --> D{"mermaid-isomorphic<br/>available?"}
     D -- "no" --> E{"mmdc on PATH?"}
-    E -- "no" --> F["Return mermaidCode\nas fenced code block\n+ install instructions"]
+    E -- "no" --> F["Return mermaidCode<br/>as fenced code block<br/>with install instructions"]
     E -- "yes" --> G["spawn mmdc subprocess"]
     D -- "yes" --> H["spawn mermaid-isomorphic"]
-    G --> I{"Timeout > 15s\nor exit code ≠ 0?"}
+    G --> I{"Timeout > 15s<br/>or exit code != 0?"}
     H --> I
-    I -- "timeout" --> J["AbortSignal cancels subprocess\nReturn: 'Rendering timed out.\nTry a simpler diagram.'"]
-    I -- "crash" --> K["Retry once\nthen fall back to ASCII\nor source"]
+    I -- "timeout" --> J["AbortSignal cancels subprocess<br/>Return: Rendering timed out.<br/>Try a simpler diagram."]
+    I -- "crash" --> K["Retry once<br/>then fall back to ASCII<br/>or source"]
     I -- "success" --> L["SVG → PNG via sharp"]
     L --> M{"sharp available?"}
-    M -- "no" --> N["Save SVG to temp file\nReturn path in llmContent"]
+    M -- "no" --> N["Save SVG to temp file<br/>Return path in llmContent"]
     M -- "yes" --> O["PNG Buffer → encoder"]
 
-    style C fill:#f8d7da,stroke:#dc3545
-    style F fill:#fff3cd,stroke:#ffc107
-    style J fill:#f8d7da,stroke:#dc3545
+    style C fill:#8b1a1a,color:#ffffff,stroke:#6b0f0f
+    style F fill:#7a5200,color:#ffffff,stroke:#5a3c00
+    style J fill:#8b1a1a,color:#ffffff,stroke:#6b0f0f
 ```
 
 ### 7.3 Image Encoding & Display Failures
