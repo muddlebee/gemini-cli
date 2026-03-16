@@ -197,13 +197,13 @@ graph TD
     E[Neovim companion - Lua plugin + bridge process]
     F[Zed companion - Rust/WASM extension]
 
-    A -->|consumes| B
-    B -->|implemented by| D
-    B -->|implemented by| E
-    B -->|implemented by| F
-    C -->|guides implementation of| D
-    C -->|guides implementation of| E
-    C -->|guides implementation of| F
+    A --> B
+    B --> D
+    B --> E
+    B --> F
+    C --> D
+    C --> E
+    C --> F
 ```
 
 All three editor integrations are in scope for this GSoC — not as stretch goals, but as planned deliverables. The sequencing is deliberate: JetBrains first (weeks 1–8) because it's the most complex and has the largest user impact, Neovim next (weeks 9–10) which reuses the same companion contract with a different runtime model, then Zed (weeks 11–12) which is the most self-contained. The Common IDE Context Protocol and documentation land alongside each implementation as it's completed.
@@ -293,7 +293,7 @@ graph TD
     E[EditorContextTracker]
     F[GeminiDiffManager]
     G[TerminalEnvSyncService]
-    H[/tmp/gemini/ide/ - discovery file]
+    H["Discovery file (/tmp/gemini/ide/)"]
     I[Gemini CLI - IdeClient]
 
     A --> B
@@ -453,7 +453,7 @@ graph TD
     D[McpHttpServer - Node.js bridge process]
     E[DiscoveryFileManager - writes file with Neovim PID]
     F[Gemini CLI - IdeClient]
-    H[/tmp/gemini/ide/ - discovery file]
+    H["Discovery file (/tmp/gemini/ide/)"]
 
     A --> B
     A --> C
@@ -503,7 +503,7 @@ graph TD
     D[DiscoveryFileManager]
     E[DiffManager - Zed native diff API]
     F[Gemini CLI - IdeClient]
-    H[/tmp/gemini/ide/ - discovery file]
+    H["Discovery file (/tmp/gemini/ide/)"]
 
     A --> B
     A --> C
