@@ -1,14 +1,17 @@
 description = "Apply a generated variant by index or ID"
 prompt = """
-Execute this command in one step.
+Execute this command in exactly one tool call.
 
-Immediately call the MCP tool `mcp_superdesignMvp_design_apply_variant` with `variantId` from args.
-- If args is `2`, apply second variant via tool support.
-- If args is a full variant ID, pass as-is.
+Immediately call `mcp_superdesignMvp_design_apply_variant` with:
+- `variantId`: raw args string
+- If args is `2`, pass `"2"` (the tool resolves index -> id)
 
-Do not run searches, read files, or use shell commands.
+Do not run searches, read files, or shell commands.
+Do not call any other MCP tools.
 
-Then confirm active variant and summarize the layout style in one sentence.
+After the tool response, print only:
+1) active variant id
+2) layout style
 
 Args: {{args}}
 """

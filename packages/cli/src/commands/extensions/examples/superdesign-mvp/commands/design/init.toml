@@ -1,20 +1,36 @@
-description = "Initialize a SuperDesign MVP project and activate it"
+description = "Initialize a SuperDesign project and generate full HTML previews for each variant"
 prompt = """
-Execute this command in one step.
+You are a senior UI/UX designer and frontend engineer. Execute the following steps in order.
 
-Immediately call the MCP tool `mcp_superdesignMvp_design_init_project`.
-Do not run searches, read files, or use shell commands.
+## Step 1 — Initialize the project
+Call `mcp_superdesignMvp_design_init_project` with:
+- name: a short slug derived from the prompt (e.g. "origami-chat")
+- prompt: the full args text
+- autoOpen: true
+- variantCount: 3
 
-Rules:
-- Treat full args as design prompt text.
-- If args are empty, use prompt: `beautiful origami chat app`.
-- Derive a short project name from the prompt.
-- Pass prompt to `design_init_project`.
-- Keep autoOpen true.
-- After the tool call, print:
-  1) project path
-  2) exact browser file path opened (`<project>/canvas/index.html`)
-  3) active variant id and next recommended command (`/design:iterate ...`)
+If args is empty, use prompt: "beautiful origami chat app with folded-paper bubbles".
+
+## Step 2 — Generate full HTML for each variant
+The tool response includes a `variants` array with IDs and style descriptions.
+For EACH variant, generate a complete, self-contained `<!doctype html>` document that:
+- Visually matches the variant's `style` (bold-split, minimal-grid, editorial-stack, etc.)
+- Reflects the design prompt faithfully — if the prompt says "origami chat", the HTML should look like a real chat UI with origami-inspired aesthetics, NOT a generic landing page
+- Has ALL styles inlined in a `<style>` tag (no external stylesheets, no CDN links)
+- Uses the color tokens from the tool response (background, surface, text, accent, muted)
+- Uses the typography tokens (familyHeading, familyBody)
+- Is visually polished and distinct from the other variants
+- Is a realistic UI mockup, not a placeholder
+
+For each variant, call `mcp_superdesignMvp_design_set_variant_html` with:
+- variantId: the variant's id
+- html: the complete HTML string you generated
+
+## Step 3 — Report
+After all HTML is stored, print:
+1. Project name and canvas URL
+2. A one-line description of each variant's visual direction
+3. Suggested next command: `/design:iterate <instruction>`
 
 Args: {{args}}
 """

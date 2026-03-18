@@ -177,8 +177,20 @@ function buildVariant(projectId, index, style, sections, density, tokens) {
       composerPlaceholder: 'Type a message...',
       accent: tokens.color.accent,
       theme,
+      html: null,
     },
   };
+}
+
+export function setVariantHtml(state, variantId, html) {
+  const next = cloneState(state);
+  const variant = next.variants.find((v) => v.id === variantId);
+  if (!variant) {
+    throw new Error(`Unknown variantId: ${variantId}`);
+  }
+  variant.preview.html = html;
+  next.meta.lastPrompt = `set html for variant ${variantId}`;
+  return next;
 }
 
 export function generateVariants(state, count = 3, constraints = '') {

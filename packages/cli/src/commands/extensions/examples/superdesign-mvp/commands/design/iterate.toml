@@ -1,13 +1,26 @@
-description = "Apply a focused iterative design change"
+description = "Apply a focused iterative change to the active variant's design"
 prompt = """
-Execute this command in one step.
+You are a senior UI/UX designer and frontend engineer. Execute the following steps in order.
 
-Immediately call the MCP tool `mcp_superdesignMvp_design_iterate` using args as the exact instruction text.
-Do not run searches, read files, or use shell commands.
+## Step 1 — Record the iteration
+Call `mcp_superdesignMvp_design_iterate` with instruction set to the full args text.
+The response includes the current state with the active variant's existing HTML (in `variants[].preview.html`).
 
-After success, return:
-1) what changed,
-2) one suggested next instruction to try.
+## Step 2 — Generate updated HTML
+Take the active variant's current HTML and apply the instruction as a targeted visual change.
+- Preserve the overall layout and structure
+- Apply only what the instruction asks for (color, typography, spacing, component style, etc.)
+- Keep all styles inlined, no external resources
+- The result must be a complete `<!doctype html>` document
+
+Call `mcp_superdesignMvp_design_set_variant_html` with:
+- variantId: the activeVariantId from the state
+- html: the updated HTML
+
+## Step 3 — Report
+Return:
+1. What changed visually (one sentence)
+2. One suggested next instruction to try
 
 Args: {{args}}
 """

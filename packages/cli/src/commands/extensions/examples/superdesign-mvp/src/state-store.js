@@ -171,6 +171,7 @@ export function summarizeState(state) {
     inspirationCount: state.inspirations.length,
     variantCount: state.variants.length,
     activeVariantId: state.activeVariantId,
+    layoutStyle: state.layout?.style ?? null,
     history: state.history,
     lastAction: state.meta.lastAction,
     canvasPath: path.join(state.project.path, CANVAS_FILE),

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import http from 'node:http';
 import path from 'node:path';
 import os from 'node:os';
 import { existsSync } from 'node:fs';
@@ -27,6 +28,7 @@ import {
   generateVariants,
   applyVariant,
   iterateDesign,
+  setVariantHtml,
   exportDesignArtifacts,
 } from './src/design-engine.js';
 
@@ -108,15 +110,179 @@ async function resolveProjectPath({ projectPath, projectId }) {
   return active;
 }
 
-function openCanvasFile(canvasPath) {
+function resolveUniqueProjectPath(basePath) {
+  // If path does not exist yet, we can safely use it.
+  if (!existsSync(basePath)) {
+    return basePath;
+  }
+
+  // If the directory exists but has no initialized state, allow reuse.
+  if (!existsSync(path.join(basePath, 'state.json'))) {
+    return basePath;
+  }
+
+  const parent = path.dirname(basePath);
+  const name = path.basename(basePath);
+  let index = 2;
+  while (index < 10000) {
+    const candidate = path.join(parent, `${name}-${index}`);
+    if (!existsSync(candidate) || !existsSync(path.join(candidate, 'state.json'))) {
+      return candidate;
+    }
+    index += 1;
+  }
+  throw new Error('Unable to allocate unique project path.');
+}
+
+const MIME_TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+};
+
+let canvasServerPort = null;
+
+async function findFreePort(preferred = 7432) {
+  return new Promise((resolve) => {
+    const probe = http.createServer();
+    probe.listen(preferred, '127.0.0.1', () => {
+      const { port } = probe.address();
+      probe.close(() => resolve(port));
+    });
+    probe.on('error', () => {
+      const fallback = http.createServer();
+      fallback.listen(0, '127.0.0.1', () => {
+        const { port } = fallback.address();
+        fallback.close(() => resolve(port));
+      });
+    });
+  });
+}
+
+async function startCanvasServer() {
+  if (canvasServerPort !== null) {
+    return canvasServerPort;
+  }
+  const port = await findFreePort(7432);
+  const server = http.createServer(async (req, res) => {
+    const url = new URL(req.url, `http://127.0.0.1:${port}`);
+    const pathname = url.pathname;
+
+    try {
+      if (req.method === 'OPTIONS') {
+        res.writeHead(204, {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type',
+        });
+        res.end();
+        return;
+      }
+
+      if (pathname === '/state.json') {
+        const activeProjectPath = await getActiveProject();
+        if (!activeProjectPath) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'No active project' }));
+          return;
+        }
+        const stateRaw = await fs.readFile(path.join(activeProjectPath, 'state.json'), 'utf8');
+        res.writeHead(200, {
+          'Content-Type': MIME_TYPES['.json'],
+          'Cache-Control': 'no-store',
+          'Access-Control-Allow-Origin': '*',
+        });
+        res.end(stateRaw);
+        return;
+      }
+
+      if (pathname === '/api/apply-variant' && req.method === 'POST') {
+        const activeProjectPath = await getActiveProject();
+        if (!activeProjectPath) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'No active project' }));
+          return;
+        }
+
+        const chunks = [];
+        for await (const chunk of req) {
+          chunks.push(chunk);
+        }
+        const rawBody = Buffer.concat(chunks).toString('utf8');
+        const payload = rawBody ? JSON.parse(rawBody) : {};
+        const variantIdInput = payload?.variantId;
+        if (!variantIdInput) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'variantId is required' }));
+          return;
+        }
+
+        const prevState = await readState(activeProjectPath);
+        const selectedId = resolveVariantIdFromInput(prevState, variantIdInput);
+        const nextState = applyVariant(prevState, selectedId);
+        const committed = await commitEvent(
+          activeProjectPath,
+          prevState,
+          'design_apply_variant',
+          { variantId: selectedId, source: 'canvas-ui' },
+          nextState,
+        );
+        const activeVariant = committed.variants.find((variant) => variant.id === selectedId);
+
+        res.writeHead(200, {
+          'Content-Type': MIME_TYPES['.json'],
+          'Cache-Control': 'no-store',
+          'Access-Control-Allow-Origin': '*',
+        });
+        res.end(
+          JSON.stringify({
+            ok: true,
+            activeVariantId: selectedId,
+            layoutStyle: activeVariant?.style ?? committed.layout?.style ?? null,
+          }),
+        );
+        return;
+      }
+
+      // Serve canvas static files: /, /index.html, /app.js, /styles.css
+      let filePath;
+      if (pathname === '/' || pathname === '/index.html') {
+        filePath = path.join(canvasTemplateDir, 'index.html');
+      } else if (pathname === '/app.js') {
+        filePath = path.join(canvasTemplateDir, 'app.js');
+      } else if (pathname === '/styles.css') {
+        filePath = path.join(canvasTemplateDir, 'styles.css');
+      } else {
+        res.writeHead(404);
+        res.end('Not found');
+        return;
+      }
+
+      const ext = path.extname(filePath);
+      const content = await fs.readFile(filePath, 'utf8');
+      res.writeHead(200, { 'Content-Type': MIME_TYPES[ext] ?? 'text/plain' });
+      res.end(content);
+    } catch (err) {
+      res.writeHead(500);
+      res.end(String(err));
+    }
+  });
+
+  await new Promise((resolve) => server.listen(port, '127.0.0.1', resolve));
+  canvasServerPort = port;
+  return port;
+}
+
+function openUrl(url) {
   const platform = os.platform();
   let command = 'xdg-open';
-  let args = [canvasPath];
+  let args = [url];
   if (platform === 'darwin') {
     command = 'open';
   } else if (platform === 'win32') {
     command = 'cmd';
-    args = ['/c', 'start', '', canvasPath];
+    args = ['/c', 'start', '', url];
   }
   const child = spawn(command, args, {
     detached: true,
@@ -156,6 +322,13 @@ function normalizeTags(tags) {
     .filter(Boolean);
 }
 
+function resolveVariantIdFromInput(state, variantIdInput) {
+  const byIndex = Number(variantIdInput);
+  return Number.isInteger(byIndex) && byIndex > 0 && byIndex <= state.variants.length
+    ? state.variants[byIndex - 1].id
+    : String(variantIdInput);
+}
+
 const server = new McpServer({
   name: 'superdesign-mvp-server',
   version: '0.1.0',
@@ -179,7 +352,9 @@ server.registerTool(
   async ({ name, prompt, path: projectPathArg, autoOpen, variantCount }) => {
     const projectName = inferProjectName(name, prompt);
     const defaultPath = path.resolve(runtimeProjectsRoot, slugifyName(projectName));
-    const projectPath = projectPathArg ? path.resolve(projectPathArg) : defaultPath;
+    const projectPath = projectPathArg
+      ? path.resolve(projectPathArg)
+      : resolveUniqueProjectPath(defaultPath);
     let state = await initializeProject(projectPath, projectName, prompt ?? '');
     await copyCanvasTemplate(projectPath);
     if (prompt && prompt.trim()) {
@@ -229,16 +404,19 @@ server.registerTool(
       }
     }
     await setActiveProject(projectPath);
-    const canvasPath = path.join(projectPath, 'canvas', 'index.html');
+    let canvasUrl = path.join(projectPath, 'canvas', 'index.html');
     if (autoOpen ?? true) {
       try {
-        openCanvasFile(canvasPath);
+        const port = await startCanvasServer();
+        canvasUrl = `http://127.0.0.1:${port}/`;
+        openUrl(canvasUrl);
       } catch {
         // best-effort browser launch; return path regardless
       }
     }
     return textResponse('Project initialized', {
       ...summarizeState(state),
+      canvasUrl,
       runtimeProjectsRoot,
       nextSteps: [
         'Canvas should open automatically in your browser',
@@ -360,11 +538,7 @@ server.registerTool(
   async ({ variantId, projectPath, projectId }) => {
     const resolved = await resolveProjectPath({ projectPath, projectId });
     const prevState = await readState(resolved);
-    const byIndex = Number(variantId);
-    const selectedId =
-      Number.isInteger(byIndex) && byIndex > 0 && byIndex <= prevState.variants.length
-        ? prevState.variants[byIndex - 1].id
-        : variantId;
+    const selectedId = resolveVariantIdFromInput(prevState, variantId);
     const nextState = applyVariant(prevState, selectedId);
     const committed = await commitEvent(
       resolved,
@@ -373,7 +547,46 @@ server.registerTool(
       { variantId: selectedId },
       nextState,
     );
-    return textResponse('Variant applied', summarizeState(committed));
+    const activeVariant = committed.variants.find((variant) => variant.id === selectedId);
+    return textResponse('Variant applied', {
+      ...summarizeState(committed),
+      layoutStyle: activeVariant?.style ?? committed.layout?.style ?? null,
+    });
+  },
+);
+
+server.registerTool(
+  'design_set_variant_html',
+  {
+    description:
+      'Store a complete self-contained HTML document as the visual preview for a specific variant. ' +
+      'Call this after generating the HTML for a variant so the canvas can render it in an iframe. ' +
+      'The html must be a full <!doctype html> document with all styles inlined.',
+    inputSchema: z
+      .object({
+        variantId: z.string().min(1),
+        html: z.string().min(1),
+        projectPath: z.string().optional(),
+        projectId: z.string().optional(),
+      })
+      .shape,
+  },
+  async ({ variantId, html, projectPath, projectId }) => {
+    const resolved = await resolveProjectPath({ projectPath, projectId });
+    const prevState = await readState(resolved);
+    const nextState = setVariantHtml(prevState, variantId, html);
+    const committed = await commitEvent(
+      resolved,
+      prevState,
+      'design_set_variant_html',
+      { variantId, htmlLength: html.length },
+      nextState,
+    );
+    return textResponse('Variant HTML stored', {
+      ...summarizeState(committed),
+      variantId,
+      htmlLength: html.length,
+    });
   },
 );
 

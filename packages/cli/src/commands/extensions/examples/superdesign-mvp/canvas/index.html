@@ -3,53 +3,55 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>SuperDesign MVP Canvas</title>
+    <title>SuperDesign Canvas</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <div class="app-shell">
       <header class="topbar">
-        <h1 id="theme-app-name">SuperDesign Canvas</h1>
-        <div class="status">
-          <span id="project-name">No project loaded</span>
-          <span id="updated-at">waiting for state</span>
+        <div class="topbar-left">
+          <span class="logo">SuperDesign</span>
+          <span id="project-name" class="project-name">No project loaded</span>
+        </div>
+        <div class="topbar-right">
+          <span id="updated-at" class="status-text">waiting for state</span>
+          <span id="live-indicator" class="live-dot">●</span>
         </div>
       </header>
-      <main class="layout">
-        <section class="stage">
-          <p id="theme-kicker" class="kicker">Prompt-seeded direction</p>
-          <h2 id="hero-headline" class="headline">Initializing design...</h2>
-          <p id="hero-description" class="subline">Waiting for active variant.</p>
-          <button id="hero-cta" class="primary" type="button">Open Conversation</button>
 
-          <article class="chat-shell">
-            <header class="chat-header">
-              <span id="chat-title">Live Prototype</span>
-              <span id="live-indicator">polling live</span>
-            </header>
-            <ul id="chat-messages" class="chat-messages"></ul>
-            <footer class="composer">
-              <span id="composer-placeholder">Type a message...</span>
-            </footer>
-          </article>
-        </section>
+      <div class="workspace">
+        <main class="stage">
+          <div id="preview-area" class="preview-area">
+            <div id="empty-state" class="empty-state">
+              <p class="empty-icon">⬡</p>
+              <p class="empty-title">Waiting for design</p>
+              <p class="empty-hint">Run <code>/design:init your prompt</code> to generate variants</p>
+            </div>
+            <iframe
+              id="preview-frame"
+              class="preview-frame hidden"
+              sandbox="allow-scripts allow-same-origin"
+              title="Design preview"
+            ></iframe>
+          </div>
+          <div id="history-bar" class="history-bar"></div>
+        </main>
 
         <aside class="rail">
           <section class="rail-card">
-            <h3>Variants</h3>
-            <ul id="variant-list" class="list"></ul>
+            <h3 class="rail-label">Variants</h3>
+            <div id="variant-list" class="variant-list"></div>
           </section>
           <section class="rail-card">
-            <h3>Inspiration</h3>
+            <h3 class="rail-label">Inspiration</h3>
             <ul id="inspiration-list" class="list compact"></ul>
           </section>
           <section class="rail-card">
-            <h3>State</h3>
-            <div id="history-meta" class="meta"></div>
-            <div id="layout-sections" class="chips"></div>
+            <h3 class="rail-label">Tokens</h3>
+            <div id="token-swatches" class="token-swatches"></div>
           </section>
         </aside>
-      </main>
+      </div>
     </div>
     <script type="module" src="./app.js"></script>
   </body>
