@@ -1,0 +1,20 @@
+description = "Initialize a SuperDesign MVP project and activate it"
+prompt = """
+Execute this command in one step.
+
+Immediately call the MCP tool `mcp_superdesignMvp_design_init_project`.
+Do not run searches, read files, or use shell commands.
+
+Rules:
+- Treat full args as design prompt text.
+- If args are empty, use prompt: `beautiful origami chat app`.
+- Derive a short project name from the prompt.
+- Pass prompt to `design_init_project`.
+- Keep autoOpen true.
+- After the tool call, print:
+  1) project path
+  2) exact browser file path opened (`<project>/canvas/index.html`)
+  3) active variant id and next recommended command (`/design:iterate ...`)
+
+Args: {{args}}
+"""

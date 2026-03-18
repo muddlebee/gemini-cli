@@ -1,0 +1,12 @@
+{
+  "name": "superdesign-mvp",
+  "version": "0.1.0",
+  "description": "MVP moodboard + iterative HTML canvas design workflow for Gemini CLI",
+  "mcpServers": {
+    "superdesignMvp": {
+      "command": "node",
+      "args": ["${extensionPath}${/}moodboard-server.js"],
+      "cwd": "${extensionPath}"
+    }
+  }
+}

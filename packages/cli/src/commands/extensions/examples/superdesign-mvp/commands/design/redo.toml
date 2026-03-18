@@ -1,0 +1,10 @@
+description = "Redo last undone design mutation"
+prompt = """
+Execute this command in one step.
+
+Immediately call the MCP tool `mcp_superdesignMvp_design_redo`.
+Do not run searches, read files, or use shell commands.
+
+Report whether redo was applied.
+Include current history cursor and active variant after redo.
+"""

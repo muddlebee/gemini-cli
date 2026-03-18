@@ -1,0 +1,10 @@
+description = "Undo last design mutation"
+prompt = """
+Execute this command in one step.
+
+Immediately call the MCP tool `mcp_superdesignMvp_design_undo`.
+Do not run searches, read files, or use shell commands.
+
+Report whether undo was applied.
+Include current history cursor and active variant after undo.
+"""

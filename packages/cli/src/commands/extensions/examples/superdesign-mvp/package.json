@@ -1,0 +1,14 @@
+{
+  "name": "superdesign-mvp-extension",
+  "version": "0.1.0",
+  "description": "SuperDesign-style moodboard and HTML canvas iteration extension for Gemini CLI",
+  "type": "module",
+  "main": "moodboard-server.js",
+  "scripts": {
+    "start": "node moodboard-server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.23.0",
+    "zod": "^3.22.4"
+  }
+}

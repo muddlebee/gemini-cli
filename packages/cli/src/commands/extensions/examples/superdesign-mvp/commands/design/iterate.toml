@@ -1,0 +1,13 @@
+description = "Apply a focused iterative design change"
+prompt = """
+Execute this command in one step.
+
+Immediately call the MCP tool `mcp_superdesignMvp_design_iterate` using args as the exact instruction text.
+Do not run searches, read files, or use shell commands.
+
+After success, return:
+1) what changed,
+2) one suggested next instruction to try.
+
+Args: {{args}}
+"""

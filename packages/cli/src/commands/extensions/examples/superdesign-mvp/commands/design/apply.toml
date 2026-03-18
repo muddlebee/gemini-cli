@@ -1,0 +1,14 @@
+description = "Apply a generated variant by index or ID"
+prompt = """
+Execute this command in one step.
+
+Immediately call the MCP tool `mcp_superdesignMvp_design_apply_variant` with `variantId` from args.
+- If args is `2`, apply second variant via tool support.
+- If args is a full variant ID, pass as-is.
+
+Do not run searches, read files, or use shell commands.
+
+Then confirm active variant and summarize the layout style in one sentence.
+
+Args: {{args}}
+"""
